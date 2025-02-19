@@ -1,3 +1,6 @@
 {
-  "wake.compiler.solc.remappings": ["hardhat/=node_modules/hardhat/"]
+  "wake.compiler.solc.remappings": [
+    "@uniswap/=node_modules/@uniswap/",
+    "hardhat/=node_modules/hardhat/"
+  ]
 }

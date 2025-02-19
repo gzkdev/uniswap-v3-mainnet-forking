@@ -14,6 +14,9 @@ importers:
       '@uniswap/v3-periphery':
         specifier: ^1.4.4
         version: 1.4.4
+      contracts:
+        specifier: link:@openzeppelin/contracts
+        version: link:@openzeppelin/contracts
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
