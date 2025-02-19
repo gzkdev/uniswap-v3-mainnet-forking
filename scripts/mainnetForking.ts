@@ -1,107 +1,72 @@
 import { ethers } from "hardhat";
-import helpers from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { Contract } from "ethers";
+import { abi as IUniswapV3PoolABI } from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
+import { abi as INonfungiblePositionManagerABI } from "@uniswap/v3-periphery/artifacts/contracts/interfaces/INonfungiblePositionManager.sol/INonfungiblePositionManager.json";
+import dotenv from "dotenv";
 
-const main = async () => {
-  const USDCAddress = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-  const DAIAddress = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
-  const wethAdress = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+dotenv.config();
 
-  const UNIRouter = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+const NONFUNGIBLE_POSITION_MANAGER =
+  "0xC36442b4a4522E871399CD717aBDD847Ab11FE88";
+const UNISWAP_POOL_ADDRESS = "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8"; // Example: USDC/ETH pool
 
-  const USDCHolder = "0xf584f8728b874a6a5c7a8d4d387c9aae9172d621";
+async function main() {
+  const [deployer] = await ethers.getSigners();
 
-  await helpers.impersonateAccount(USDCHolder);
-  const impersonatedSigner = await ethers.getSigner(USDCHolder);
+  console.log(`Using account: ${deployer.address}`);
 
-  const amountOut = ethers.parseUnits("2000", 6);
-  const amountIn = ethers.parseEther("1");
-  const amountInMax = ethers.parseEther("100");
-
-  const amountADesired = ethers.parseUnits("20000", 6);
-  const amountBDesired = ethers.parseUnits("200000000000000000000", 18);
-
-  const USDC = await ethers.getContractAt("IERC20", USDCAddress);
-  const DAI = await ethers.getContractAt("IERC20", DAIAddress);
-  const WETH = await ethers.getContractAt("IERC20", wethAdress);
-
-  const ROUTER = await ethers.getContractAt("IUniswapV3", UNIRouter);
-
-  console.log(
-    "----------------------------geting Router-------------------------------------"
+  const pool = new Contract(UNISWAP_POOL_ADDRESS, IUniswapV3PoolABI, deployer);
+  const positionManager = new Contract(
+    NONFUNGIBLE_POSITION_MANAGER,
+    INonfungiblePositionManagerABI,
+    deployer
   );
 
-  const approvesA = await USDC.connect(impersonatedSigner).approve(
-    UNIRouter,
-    amountADesired
-  );
+  // Token addresses for USDC and WETH
+  const token0 = await pool.token0();
+  const token1 = await pool.token1();
+  const fee = await pool.fee();
 
-  await approvesA.wait();
+  console.log(`Adding liquidity to pool: ${token0} - ${token1}`);
 
-  const approveB = await DAI.connect(impersonatedSigner).approve(
-    UNIRouter,
-    amountBDesired
-  );
+  // Approve tokens for spending
+  const token0Contract = await ethers.getContractAt("IERC20", token0, deployer);
+  const token1Contract = await ethers.getContractAt("IERC20", token1, deployer);
 
-  await approveB.wait();
+  await token0Contract.approve(
+    NONFUNGIBLE_POSITION_MANAGER,
+    ethers.parseUnits("1000", 6)
+  ); // Approve USDC
+  await token1Contract.approve(
+    NONFUNGIBLE_POSITION_MANAGER,
+    ethers.parseEther("1")
+  ); // Approve WETH
 
-  console.log(
-    "---------------------Apprv B--------------------------------------------"
-  );
+  // Define price range
+  const tickLower = -887220;
+  const tickUpper = 887220;
 
-  const ethBal = await impersonatedSigner.provider.getBalance(USDCHolder);
-  const wethBal = await WETH.balanceOf(impersonatedSigner.address);
+  // Add liquidity
+  const tx = await positionManager.mint({
+    token0,
+    token1,
+    fee,
+    tickLower,
+    tickUpper,
+    amount0Desired: ethers.parseUnits("1000", 6),
+    amount1Desired: ethers.parseEther("1"),
+    amount0Min: 0,
+    amount1Min: 0,
+    recipient: deployer.address,
+    deadline: Math.floor(Date.now() / 1000) + 60 * 10,
+  });
 
-  console.log(
-    "-----------------------------------------------------------------"
-  );
+  await tx.wait();
 
-  const usdcBal = await USDC.balanceOf(impersonatedSigner.address);
-  const daiBal = await DAI.balanceOf(impersonatedSigner.address);
-
-  console.log(
-    "-----------------------Bal b4 adding lquidity------------------------------------------"
-  );
-
-  console.log("USDC Balance:", ethers.formatUnits(usdcBal, 6));
-  console.log("DAI Balance:", ethers.formatUnits(daiBal, 18));
-
-  console.log(
-    "-------------------------adding liquidity------------------------------------"
-  );
-
-  const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
-
-  const swapTx = await ROUTER.connect(impersonatedSigner).addLiquidity(
-    USDCAddress,
-    DAIAddress,
-    amountADesired,
-    amountBDesired,
-    0,
-    0,
-    impersonatedSigner.address,
-    deadline
-  );
-
-  await swapTx.wait();
-
-  const usdcBalAfterSwap = await USDC.balanceOf(impersonatedSigner.address);
-  const daiBalAfterSwap = await DAI.balanceOf(impersonatedSigner.address);
-
-  console.log(
-    "-----------------Liquidity added---------------------------------------"
-  );
-
-  console.log(
-    "usdc balance after adding liquidity",
-    ethers.formatUnits(usdcBalAfterSwap, 6)
-  );
-  console.log(
-    "dai balance after adding liquidity",
-    ethers.formatUnits(daiBalAfterSwap, 18)
-  );
-};
+  console.log("Liquidity added successfully!");
+}
 
 main().catch((error) => {
   console.error(error);
-  process.exitCode = 1;
+  process.exit(1);
 });
