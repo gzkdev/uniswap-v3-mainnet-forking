@@ -1,7 +1,7 @@
-// SPDX_License_Identifier: UNLICENSED
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-interface UniswapV3 {
+interface IUniswapV3 {
     // Address of ERC20 token sold on this exchange
     function tokenAddress() external view returns (address token);
     // Address of Uniswap Factory
